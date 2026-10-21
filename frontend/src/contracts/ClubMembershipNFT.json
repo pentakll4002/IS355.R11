@@ -1,0 +1,8 @@
+[
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function balanceOf(address owner) view returns (uint256)",
+  "function isMember(address user) view returns (bool)",
+  "function memberRoles(uint256 tokenId) view returns (string)",
+  "function mintMemberCard(address to, string role) returns (uint256)"
+]

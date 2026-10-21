@@ -1,0 +1,15 @@
+[
+  "function proposalCount() view returns (uint256)",
+  "function votingDuration() view returns (uint256)",
+  "function quorumPercentage() view returns (uint256)",
+  "function getTreasuryBalance() view returns (uint256)",
+  "function state(uint256 proposalId) view returns (uint8)",
+  "function hasVoted(uint256 proposalId, address voter) view returns (bool)",
+  "function getProposal(uint256 proposalId) view returns (uint256 id, address proposer, address payable recipient, uint256 amount, string title, string ipfsCid, uint256 forVotes, uint256 againstVotes, uint256 startTime, uint256 endTime, bool executed, uint8 currentState)",
+  "function propose(address payable recipient, uint256 amount, string title, string ipfsCid) returns (uint256)",
+  "function vote(uint256 proposalId, uint8 support)",
+  "function execute(uint256 proposalId)",
+  "event ProposalCreated(uint256 indexed proposalId, address indexed proposer, address indexed recipient, uint256 amount, string title, string ipfsCid, uint256 startTime, uint256 endTime)",
+  "event Voted(uint256 indexed proposalId, address indexed voter, uint8 support, uint256 weight)",
+  "event ProposalExecuted(uint256 indexed proposalId, address indexed recipient, uint256 amount)"
+]

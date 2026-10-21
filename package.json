@@ -1,0 +1,17 @@
+{
+  "name": "is355-dao-project",
+  "version": "1.0.0",
+  "description": "Do an Xay dung Mo hinh Quan tri Phi tap trung (DAO) - IS355 Blockchain UIT",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "simulate": "hardhat run scripts/simulate_dao.js --network localhost"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.0.2",
+    "hardhat": "^2.22.2"
+  }
+}

@@ -1,0 +1,9 @@
+[
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+  "function totalSupply() view returns (uint256)",
+  "function balanceOf(address account) view returns (uint256)",
+  "function mint(address to, uint256 amount, string reason)",
+  "event Transfer(address indexed from, address indexed to, uint256 value)"
+]
