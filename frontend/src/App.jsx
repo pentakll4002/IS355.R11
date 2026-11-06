@@ -4,6 +4,7 @@ import contractsConfig from './contracts/config.json';
 import ClubDAOAbi from './contracts/ClubDAO.json';
 import ClubGovTokenAbi from './contracts/ClubGovToken.json';
 import ClubMembershipNFTAbi from './contracts/ClubMembershipNFT.json';
+import './App.css';
 
 const STATE_NAMES = ['Pending', 'Active', 'Defeated', 'Succeeded', 'Executed'];
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
@@ -27,7 +28,6 @@ export default function App() {
   const [formRecipient, setFormRecipient] = useState('');
   const [formAmount, setFormAmount] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [formCategory, setFormCategory] = useState('Mua sắm thiết bị Lab');
 
   // Modal xem IPFS
   const [selectedIpfsData, setSelectedIpfsData] = useState(null);
@@ -126,23 +126,7 @@ export default function App() {
       }
       setProposals(list);
     } catch (e) {
-      console.warn("Chưa tải được danh sách proposal on-chain, dùng danh sách mẫu:", e);
-      setProposals([
-        {
-          id: 1,
-          proposer: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-          recipient: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
-          amount: "0.5",
-          title: "Đề xuất mua sắm máy chiếu & thiết bị nghiên cứu AI/Blockchain",
-          ipfsCid: "QmProposalEquipmentsLab2026UIT",
-          forVotes: 3000,
-          againstVotes: 1000,
-          startTime: Date.now() / 1000 - 400,
-          endTime: Date.now() / 1000 - 100,
-          executed: false,
-          state: 3, // Succeeded
-        }
-      ]);
+      console.warn("Chưa tải được danh sách proposal on-chain:", e);
     }
   };
 
@@ -156,6 +140,33 @@ export default function App() {
           loadProposals(provider);
         }
       });
+
+      const handleAccountsChanged = (accounts) => {
+        if (accounts.length > 0) {
+          const newAccount = accounts[0];
+          setAccount(newAccount);
+          const newProvider = new ethers.BrowserProvider(window.ethereum);
+          refreshUserData(newAccount, newProvider);
+          loadProposals(newProvider);
+        } else {
+          setAccount('');
+          setHasNFT(false);
+          setTokenBalance('0');
+          setBackendVerified(null);
+        }
+      };
+
+      const handleChainChanged = () => {
+        window.location.reload();
+      };
+
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', handleChainChanged);
+
+      return () => {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+      };
     }
   }, []);
 
@@ -167,9 +178,8 @@ export default function App() {
 
     try {
       setLoading(true);
-      setMsg({ text: "1/2: Đang đẩy tài liệu lên IPFS...", type: "warning" });
+      setMsg({ text: "1/2: Đang tải tài liệu lên IPFS...", type: "warning" });
 
-      // Gọi Backend Web3.py để upload lên IPFS
       let ipfsCid = "QmDefaultProposal" + Date.now();
       try {
         const resp = await fetch(`${BACKEND_URL}/api/ipfs/upload-proposal`, {
@@ -179,7 +189,7 @@ export default function App() {
             title: formTitle,
             description: formDescription,
             financialDetails: { amountETH: formAmount, recipient: formRecipient },
-            governanceCategory: formCategory,
+            governanceCategory: "Đầu tư thiết bị & Hoạt động Lab",
           }),
         });
         if (resp.ok) {
@@ -267,7 +277,7 @@ export default function App() {
     }
   };
 
-  // Tiện ích tua nhanh thời gian Blockchain (phục vụ demo trực tiếp)
+  // Tiện ích tua nhanh thời gian Blockchain
   const handleAdvanceTime = async () => {
     try {
       setLoading(true);
@@ -278,7 +288,7 @@ export default function App() {
         body: JSON.stringify({ seconds: 320 })
       });
       if (resp.ok) {
-        setMsg({ text: "Đã tua thời gian blockchain qua hạn biểu quyết! Bây giờ bạn có thể gọi execute().", type: "success" });
+        setMsg({ text: "Đã qua hạn biểu quyết! Đề xuất đủ Quorum đã sẵn sàng giải ngân.", type: "success" });
         if (window.ethereum) {
           const provider = new ethers.BrowserProvider(window.ethereum);
           await loadProposals(provider);
@@ -297,7 +307,7 @@ export default function App() {
   const handleTriggerBot = async () => {
     try {
       setLoading(true);
-      setMsg({ text: "Bot Web3.py đang quét và tự động thực thi các đề xuất đạt Quorum...", type: "warning" });
+      setMsg({ text: "Bot Web3.py đang quét các đề xuất đạt Quorum...", type: "warning" });
       const resp = await fetch(`${BACKEND_URL}/api/bot/auto-execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -305,7 +315,7 @@ export default function App() {
       });
       if (resp.ok) {
         const data = await resp.json();
-        setMsg({ text: `Bot quét xong: ${data.readyToExecute.length} đề xuất sẵn sàng giải ngân!`, type: "success" });
+        setMsg({ text: `Bot Web3.py đã kích hoạt giải ngân cho các đề xuất đủ điều kiện!`, type: "success" });
         if (window.ethereum) {
           const provider = new ethers.BrowserProvider(window.ethereum);
           await loadProposals(provider);
@@ -330,13 +340,13 @@ export default function App() {
       } else {
         setSelectedIpfsData({
           cid: cid,
-          content: `# Tài liệu IPFS [${cid}]\n- Đã được băm và lưu trữ phi tập trung.`
+          content: `# Tài liệu IPFS [${cid}]\n- Đã được lưu trữ phi tập trung.`
         });
       }
     } catch {
       setSelectedIpfsData({
         cid: cid,
-        content: `Mã CID: ${cid}\nTài liệu quản trị lưu trữ phi tập trung (IPFS Gateway: https://gateway.pinata.cloud/ipfs/${cid})`
+        content: `Mã CID: ${cid}\nTài liệu quản trị lưu trữ phi tập trung (IPFS Gateway)`
       });
     } finally {
       setLoadingIpfs(false);
@@ -350,33 +360,22 @@ export default function App() {
         <div className="brand-section">
           <div className="logo-badge">DAO</div>
           <div>
-            <h1 className="brand-title">UIT Student Club DAO</h1>
-            <p className="brand-sub">Hệ thống Quản trị Phi tập trung & Ngân quỹ Sinh viên (IS355)</p>
+            <h1 className="brand-title">UIT Governance Portal</h1>
+            <p className="brand-sub">Hệ Thống Quản Trị Phi Tập Trung & Ngân Quỹ Sinh Viên (IS355.R11)</p>
           </div>
         </div>
 
         <div className="wallet-section">
           {account ? (
             <>
-              {hasNFT ? (
-                <div className="member-badge" title="Bạn có quyền tạo đề xuất propose()">
-                  <span>★</span> NFT Thẻ Thành Viên
-                </div>
-              ) : (
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                  (Cử tri thường)
+              {hasNFT && (
+                <div className="member-badge" title="Ví có NFT Thẻ Thành Viên (được quyền Propose)">
+                  ★ Hội viên NFT
                 </div>
               )}
 
               {backendVerified && (
-                <div style={{
-                  fontSize: '0.75rem',
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  background: 'rgba(56, 189, 248, 0.15)',
-                  border: '1px solid #38bdf8',
-                  color: '#38bdf8'
-                }}>
+                <div className="verified-pill">
                   ✓ Web3.py Verified
                 </div>
               )}
@@ -384,12 +383,12 @@ export default function App() {
               <div className="wallet-info">
                 <span>{account.slice(0, 6)}...{account.slice(-4)}</span>
                 <span className="token-balance-tag">{tokenBalance} CGT</span>
-                <span style={{ color: '#10b981' }}>{ethBalance} ETH</span>
+                <span className="eth-balance-tag">{ethBalance} ETH</span>
               </div>
             </>
           ) : (
             <button className="btn-connect" onClick={connectWallet} disabled={loading}>
-              Kết nối MetaMask
+              Kết nối ví MetaMask
             </button>
           )}
         </div>
@@ -398,66 +397,70 @@ export default function App() {
       {/* THÔNG BÁO ALERT */}
       {msg.text && (
         <div style={{
-          padding: '12px 18px',
-          borderRadius: '12px',
+          padding: '12px 16px',
+          borderRadius: '8px',
           marginBottom: '20px',
-          fontSize: '0.9rem',
-          background: msg.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : msg.type === 'warning' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(244, 63, 94, 0.15)',
-          border: `1px solid ${msg.type === 'success' ? '#10b981' : msg.type === 'warning' ? '#f59e0b' : '#f43f5e'}`,
-          color: msg.type === 'success' ? '#34d399' : msg.type === 'warning' ? '#fbbf24' : '#fda4af',
+          fontSize: '0.88rem',
+          fontWeight: '500',
+          background: msg.type === 'success' ? 'var(--success-bg)' : msg.type === 'warning' ? 'var(--warning-bg)' : 'var(--danger-bg)',
+          border: `1px solid ${msg.type === 'success' ? 'var(--success-border)' : msg.type === 'warning' ? 'var(--warning-border)' : 'var(--danger-border)'}`,
+          color: msg.type === 'success' ? 'var(--success)' : msg.type === 'warning' ? 'var(--warning)' : 'var(--danger)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
           <span>{msg.text}</span>
-          <button style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setMsg({ text: '', type: '' })}>✕</button>
+          <button style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '1rem' }} onClick={() => setMsg({ text: '', type: '' })}>✕</button>
         </div>
       )}
 
-      {/* STATS OVERVIEW & DEMO CONTROLS */}
+      {/* STATS OVERVIEW */}
       <section className="stats-grid">
         <div className="stat-card">
-          <span className="stat-label">Quỹ DAO (Treasury)</span>
-          <span className="stat-value" style={{ color: '#a855f7' }}>{treasuryBalance} ETH</span>
-          <span className="stat-desc">Tự động giải ngân qua Smart Contract</span>
+          <div className="stat-header">
+            <span className="stat-label">Quỹ Treasury</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>On-chain</span>
+          </div>
+          <div className="stat-value" style={{ color: 'var(--purple)' }}>{treasuryBalance} ETH</div>
+          <div className="stat-desc">Smart Contract tự động giải ngân</div>
         </div>
+
         <div className="stat-card">
-          <span className="stat-label">Tổng Đề Xuất</span>
-          <span className="stat-value">{proposals.length}</span>
-          <span className="stat-desc">Đã tạo công khai on-chain</span>
+          <div className="stat-header">
+            <span className="stat-label">Tổng Đề Xuất</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Công khai</span>
+          </div>
+          <div className="stat-value">{proposals.length}</div>
+          <div className="stat-desc">Đã tạo trên mạng Blockchain</div>
         </div>
+
         <div className="stat-card">
-          <span className="stat-label">Tỷ Lệ Quorum</span>
-          <span className="stat-value" style={{ color: '#38bdf8' }}>{contractsConfig.quorumPercentage}%</span>
-          <span className="stat-desc">Tối thiểu 2,000 / 10,000 CGT tham gia</span>
+          <div className="stat-header">
+            <span className="stat-label">Ngưỡng Quorum</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--primary)' }}>Tiêu chí 1</span>
+          </div>
+          <div className="stat-value" style={{ color: 'var(--primary)' }}>{contractsConfig.quorumPercentage}%</div>
+          <div className="stat-desc">Tối thiểu 2,000 / 10,000 CGT tham gia</div>
         </div>
+
         <div className="stat-card">
-          <span className="stat-label">Sức Nặng Phiếu Của Bạn</span>
-          <span className="stat-value" style={{ color: '#10b981' }}>{tokenBalance}</span>
-          <span className="stat-desc">1 Token ERC-20 = 1 Phiếu biểu quyết</span>
+          <div className="stat-header">
+            <span className="stat-label">Sức Nặng Biểu Quyết</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--success)' }}>ERC-20</span>
+          </div>
+          <div className="stat-value" style={{ color: 'var(--success)' }}>{tokenBalance}</div>
+          <div className="stat-desc">1 CGT Token = 1 Phiếu biểu quyết</div>
         </div>
       </section>
 
       {/* DEMO ACTION TOOLBAR */}
-      <div style={{
-        display: 'flex',
-        gap: '12px',
-        alignItems: 'center',
-        background: 'rgba(30, 41, 59, 0.4)',
-        padding: '12px 18px',
-        borderRadius: '14px',
-        marginBottom: '24px',
-        border: '1px solid rgba(255, 255, 255, 0.05)',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
-            🛠️ <strong>Công cụ Demo Live:</strong>
+      <div className="demo-toolbar">
+        <div className="toolbar-actions">
+          <span style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+            🛠️ Bảng điều khiển Demo:
           </span>
           <button
             className="btn-secondary"
-            style={{ fontSize: '0.78rem', padding: '6px 12px' }}
             onClick={handleAdvanceTime}
             title="Tua qua 5 phút biểu quyết để kiểm thử hàm execute() ngay lập tức"
           >
@@ -465,7 +468,6 @@ export default function App() {
           </button>
           <button
             className="btn-secondary"
-            style={{ fontSize: '0.78rem', padding: '6px 12px' }}
             onClick={handleTriggerBot}
             title="Kích hoạt bot Web3.py tự động giải ngân các đề xuất hợp lệ"
           >
@@ -473,8 +475,8 @@ export default function App() {
           </button>
         </div>
 
-        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-          Mạng: Local Hardhat (ChainId: 31337)
+        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+          Network: Local Hardhat (ChainId: 31337)
         </div>
       </div>
 
@@ -490,19 +492,19 @@ export default function App() {
           className={`tab-btn ${activeTab === 'propose' ? 'active' : ''}`}
           onClick={() => setActiveTab('propose')}
         >
-          Tạo Đề Xuất Mới (Propose)
+          Tạo Đề Xuất (Propose)
         </button>
         <button
           className={`tab-btn ${activeTab === 'ipfs' ? 'active' : ''}`}
           onClick={() => setActiveTab('ipfs')}
         >
-          Tài Liệu Quản Trị IPFS
+          Tài Liệu IPFS (Off-chain)
         </button>
         <button
           className={`tab-btn ${activeTab === 'paper' ? 'active' : ''}`}
           onClick={() => setActiveTab('paper')}
         >
-          Cơ Sở Lý Thuyết (Paper & Autonomy)
+          Cơ Sở Lý Thuyết (Paper Review)
         </button>
       </nav>
 
@@ -510,14 +512,14 @@ export default function App() {
       {activeTab === 'board' && (
         <section>
           <div className="section-header">
-            <h2>Danh sách Đề xuất Biểu quyết</h2>
+            <h2>Danh Sách Đề Xuất Biểu Quyết</h2>
             <button className="btn-primary" onClick={() => setActiveTab('propose')}>
               + Tạo đề xuất mới
             </button>
           </div>
 
           {proposals.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
+            <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bg-surface)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', color: 'var(--text-muted)' }}>
               Chưa có đề xuất nào được tạo. Hãy kết nối ví có Membership NFT để tạo đề xuất đầu tiên!
             </div>
           ) : (
@@ -533,7 +535,7 @@ export default function App() {
                     <div>
                       <h3 className="proposal-title">#{prop.id}: {prop.title}</h3>
                       <div className="proposal-meta">
-                        <span>Xin giải ngân: <strong style={{ color: '#a855f7' }}>{prop.amount} ETH</strong></span>
+                        <span>Giải ngân: <strong style={{ color: 'var(--purple)', fontWeight: '700' }}>{prop.amount} ETH</strong></span>
                         <span>Người nhận: <code>{prop.recipient.slice(0, 8)}...{prop.recipient.slice(-6)}</code></span>
                       </div>
                     </div>
@@ -545,16 +547,16 @@ export default function App() {
                   {/* THANH TIẾN ĐỘ VOTE */}
                   <div className="vote-progress-container">
                     <div className="vote-bar-labels">
-                      <span style={{ color: '#34d399' }}>Tán thành: {prop.forVotes} CGT ({forPercent.toFixed(1)}%)</span>
-                      <span style={{ color: '#fb7185' }}>Phản đối: {prop.againstVotes} CGT ({againstPercent.toFixed(1)}%)</span>
+                      <span style={{ color: 'var(--success)' }}>Tán thành: {prop.forVotes} CGT ({forPercent.toFixed(1)}%)</span>
+                      <span style={{ color: 'var(--danger)' }}>Phản đối: {prop.againstVotes} CGT ({againstPercent.toFixed(1)}%)</span>
                     </div>
                     <div className="progress-track">
                       <div className="progress-for" style={{ width: `${forPercent}%` }}></div>
                       <div className="progress-against" style={{ width: `${againstPercent}%` }}></div>
                     </div>
                     <div className="quorum-tracker">
-                      <span>Tổng phiếu bầu: {totalVotes} CGT</span>
-                      <span>Mốc Quorum cần đạt: 2,000 CGT (20%) {totalVotes >= 2000 ? '✅ Đạt' : '⚠️ Chưa đủ'}</span>
+                      <span>Tổng phiếu bầu: <strong>{totalVotes} CGT</strong></span>
+                      <span>Mốc Quorum cần đạt: 2,000 CGT (20%) {totalVotes >= 2000 ? '✅ Đạt Quorum' : '⚠️ Chưa đủ'}</span>
                     </div>
                   </div>
 
@@ -565,7 +567,7 @@ export default function App() {
                       onClick={() => fetchIpfsDetail(prop.ipfsCid)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer' }}
                     >
-                      📁 Xem tài liệu IPFS (CID: {prop.ipfsCid.slice(0, 10)}...)
+                      📁 Chi tiết tài liệu IPFS (CID: {prop.ipfsCid.slice(0, 10)}...)
                     </button>
 
                     <div className="vote-buttons">
@@ -599,7 +601,7 @@ export default function App() {
                       )}
 
                       {prop.executed && (
-                        <span style={{ color: '#c084fc', fontSize: '0.88rem', fontWeight: '600' }}>
+                        <span style={{ color: 'var(--purple)', fontSize: '0.88rem', fontWeight: '600' }}>
                           ✓ Đã giải ngân thành công từ Quỹ Treasury
                         </span>
                       )}
@@ -614,26 +616,26 @@ export default function App() {
 
       {/* TAB 2: TẠO ĐỀ XUẤT */}
       {activeTab === 'propose' && (
-        <section style={{ maxWidth: '680px', margin: '0 auto' }}>
+        <section style={{ maxWidth: '640px', margin: '0 auto' }}>
           <div className="section-header">
             <h2>Tạo Đề Xuất Quản Trị Mới</h2>
           </div>
 
           {!hasNFT && (
             <div style={{
-              background: 'rgba(244, 63, 94, 0.1)',
-              border: '1px solid #f43f5e',
+              background: 'var(--danger-bg)',
+              border: '1px solid var(--danger-border)',
               padding: '16px',
-              borderRadius: '12px',
+              borderRadius: 'var(--radius-md)',
               marginBottom: '20px',
-              color: '#fda4af',
+              color: 'var(--danger)',
               fontSize: '0.88rem'
             }}>
               <strong>⚠️ RÀNG BUỘC PHÂN QUYỀN (Tiêu chí 4):</strong> Ví của bạn hiện không sở hữu Thẻ thành viên NFT (ClubMembershipNFT). Bạn chỉ có thể bỏ phiếu, không có quyền tạo đề xuất chi quỹ.
             </div>
           )}
 
-          <form onSubmit={handleCreateProposal} className="stat-card" style={{ gap: '16px' }}>
+          <form onSubmit={handleCreateProposal} className="form-card">
             <div className="form-group">
               <label>Tiêu đề Đề xuất *</label>
               <input
@@ -672,10 +674,10 @@ export default function App() {
             </div>
 
             <div className="form-group">
-              <label>Nội dung chi tiết & Kế hoạch (Sẽ được đẩy lên IPFS) *</label>
+              <label>Nội dung chi tiết & Kế hoạch (Tự động đẩy lên IPFS) *</label>
               <textarea
                 className="form-textarea"
-                placeholder="Mô tả chi tiết mục đích, thời gian thực hiện và lý do xin giải ngân ngân quỹ..."
+                placeholder="Mô tả mục đích, thời gian thực hiện và lý do xin giải ngân ngân quỹ..."
                 value={formDescription}
                 onChange={(e) => setFormDescription(e.target.value)}
                 required
@@ -685,7 +687,7 @@ export default function App() {
             <button
               type="submit"
               className="btn-connect"
-              style={{ width: '100%', marginTop: '10px' }}
+              style={{ width: '100%', marginTop: '8px' }}
               disabled={loading || !hasNFT}
             >
               {loading ? 'Đang xử lý...' : 'Đẩy lên IPFS & Gửi Đề Xuất on-chain'}
@@ -700,18 +702,17 @@ export default function App() {
           <div className="section-header">
             <h2>Tài Liệu Quản Trị Lưu Trữ Phi Tập Trung (IPFS)</h2>
           </div>
-          <p style={{ color: '#94a3b8', marginBottom: '24px', fontSize: '0.9rem' }}>
-            Toàn bộ văn bản quy chế, báo cáo tài chính và hồ sơ đề xuất đều được lưu trữ off-chain trên mạng lưới IPFS nhằm tiết kiệm tối đa chi phí gas on-chain theo yêu cầu Tiêu chí 3.
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.9rem', lineHeight: '1.5' }}>
+            Toàn bộ văn bản quy chế, báo cáo tài chính và hồ sơ đề xuất đều được lưu trữ off-chain trên mạng lưới IPFS nhằm tiết kiệm tối đa chi phí gas on-chain theo yêu cầu Tiêu chí 3 của đề bài.
           </p>
 
           <div className="stats-grid">
             <div className="stat-card">
               <span className="stat-label">1. Governance Rules (Hiến pháp DAO)</span>
-              <h4 style={{ margin: '8px 0' }}>constitution.json</h4>
-              <p style={{ fontSize: '0.82rem', color: '#94a3b8' }}>Chứa quy định về Quorum 20%, thời gian bầu cử và phân quyền biểu quyết.</p>
+              <h4 style={{ margin: '8px 0', fontSize: '1.1rem' }}>constitution.json</h4>
+              <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>Quy định về Quorum 20%, thời gian bầu cử và phân quyền biểu quyết theo trọng số Token.</p>
               <button
                 className="btn-secondary"
-                style={{ marginTop: '12px', fontSize: '0.8rem' }}
                 onClick={() => fetchIpfsDetail("QmConstitutionJSON123456789UITDAO")}
               >
                 Xem chi tiết JSON
@@ -720,11 +721,10 @@ export default function App() {
 
             <div className="stat-card">
               <span className="stat-label">2. Financial Reports (Báo cáo tài chính)</span>
-              <h4 style={{ margin: '8px 0' }}>financial_report_q1.json</h4>
-              <p style={{ fontSize: '0.82rem', color: '#94a3b8' }}>Bảng dự toán chi phí, báo giá đối chiếu từ các nhà cung cấp thiết bị.</p>
+              <h4 style={{ margin: '8px 0', fontSize: '1.1rem' }}>financial_report_q1.json</h4>
+              <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>Bảng dự toán chi phí, báo giá đối chiếu từ các nhà cung cấp thiết bị phần cứng.</p>
               <button
                 className="btn-secondary"
-                style={{ marginTop: '12px', fontSize: '0.8rem' }}
                 onClick={() => fetchIpfsDetail("QmFinancialReportQ12026UITBlockchain")}
               >
                 Xem dự toán chi phí
@@ -733,11 +733,10 @@ export default function App() {
 
             <div className="stat-card">
               <span className="stat-label">3. Proposal Documentation</span>
-              <h4 style={{ margin: '8px 0' }}>proposal_equipments.md</h4>
-              <p style={{ fontSize: '0.82rem', color: '#94a3b8' }}>Kế hoạch chi tiết trang bị máy tính và thiết bị kiểm thử ví lạnh cho lab.</p>
+              <h4 style={{ margin: '8px 0', fontSize: '1.1rem' }}>proposal_equipments.md</h4>
+              <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>Kế hoạch chi tiết trang bị máy tính và thiết bị kiểm thử ví lạnh cho lab nghiên cứu.</p>
               <button
                 className="btn-secondary"
-                style={{ marginTop: '12px', fontSize: '0.8rem' }}
                 onClick={() => fetchIpfsDetail("QmProposalEquipmentsLab2026UIT")}
               >
                 Xem văn bản Markdown
@@ -755,13 +754,13 @@ export default function App() {
           </div>
 
           <div className="stat-card" style={{ marginBottom: '20px' }}>
-            <h3 style={{ color: '#38bdf8', marginBottom: '8px' }}>
+            <h3 style={{ color: 'var(--primary)', marginBottom: '10px', fontSize: '1.15rem' }}>
               1. Giải Quyết Vấn Đề "Principal-Agent Problem" Trong Quản Trị
             </h3>
-            <p style={{ color: '#cbd5e1', fontSize: '0.9rem', lineHeight: '1.6' }}>
-              Theo nghiên cứu của Vilma Mattila et al. (5ire, 2022) và giáo trình Blockchain, mô hình DAO loại bỏ xung đột lợi ích cốt lõi giữa <strong>người quản lý (Agent)</strong> và <strong>người sở hữu (Principal)</strong>. Trong các tổ chức truyền thống hoặc Centralized Autonomous Organization (CAO), quỹ thường bị kiểm soát bởi một nhóm nhỏ lãnh đạo có nguy cơ lạm quyền hoặc biển thủ. Trong DAO:
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.6' }}>
+              Theo nghiên cứu của Vilma Mattila et al. (5ire, 2022) và giáo trình Công nghệ Blockchain, mô hình DAO loại bỏ xung đột lợi ích cốt lõi giữa <strong>người quản lý (Agent)</strong> và <strong>người sở hữu (Principal)</strong>. Trong các tổ chức truyền thống hoặc Centralized Autonomous Organization (CAO), quỹ thường bị kiểm soát bởi một nhóm nhỏ lãnh đạo có nguy cơ lạm quyền hoặc thiếu minh bạch. Trong DAO:
             </p>
-            <ul style={{ paddingLeft: '20px', marginTop: '10px', color: '#94a3b8', fontSize: '0.88rem', lineHeight: '1.6' }}>
+            <ul style={{ paddingLeft: '20px', marginTop: '12px', color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: '1.6' }}>
               <li><strong>Ngân quỹ phi tập trung (Treasury on-chain):</strong> Tiền không nằm trong tài khoản ngân hàng của bất kỳ cá nhân nào, mà nằm trong Smart Contract của DAO.</li>
               <li><strong>Biểu quyết dân chủ và có trọng số:</strong> Mọi thành viên nắm giữ Token (ClubGovToken) đều có quyền biểu quyết tỷ lệ với đóng góp của họ (Weighted Voting).</li>
               <li><strong>Nguyên tắc Code is Law:</strong> Khi đề xuất đạt Quorum (20%) và đa số tán thành sau thời gian quy định, hàm <code>execute()</code> tự động chuyển tiền thẳng đến địa chỉ Vendor mà không cần bất kỳ admin hay ban giám đốc nào phê duyệt.</li>
@@ -769,38 +768,38 @@ export default function App() {
           </div>
 
           <div className="stat-card">
-            <h3 style={{ color: '#a855f7', marginBottom: '12px' }}>
+            <h3 style={{ color: 'var(--purple)', marginBottom: '14px', fontSize: '1.15rem' }}>
               2. Bảng So Sánh Giữa DAO và Tổ Chức Truyền Thống (Table I trong Bài Báo)
             </h3>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.86rem', color: '#cbd5e1' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                 <thead>
-                  <tr style={{ background: 'rgba(255, 255, 255, 0.05)', textAlign: 'left' }}>
-                    <th style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>Tiêu chí so sánh</th>
-                    <th style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#38bdf8' }}>Mô hình DAO (Hệ thống này)</th>
-                    <th style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8' }}>Tổ chức truyền thống</th>
+                  <tr style={{ background: 'var(--bg-subtle)', textAlign: 'left' }}>
+                    <th style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}>Tiêu chí so sánh</th>
+                    <th style={{ padding: '12px', borderBottom: '1px solid var(--border-light)', color: 'var(--primary)' }}>Mô hình DAO (Hệ thống này)</th>
+                    <th style={{ padding: '12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>Tổ chức truyền thống</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}><strong>Cơ cấu tổ chức</strong></td>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Phẳng, dân chủ hóa hoàn toàn.</td>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Phân tầng, tập quyền thứ bậc cao.</td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}><strong>Cơ cấu tổ chức</strong></td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}>Phẳng, dân chủ hóa hoàn toàn.</td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}>Phân tầng, tập quyền thứ bậc cao.</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}><strong>Cơ chế ra quyết định</strong></td>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Bắt buộc phải bỏ phiếu cộng đồng on-chain.</td>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Một số ít lãnh đạo tự quyết hoặc biểu quyết nội bộ kín.</td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}><strong>Cơ chế ra quyết định</strong></td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}>Bắt buộc phải bỏ phiếu cộng đồng on-chain.</td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}>Một số ít lãnh đạo tự quyết hoặc biểu quyết nội bộ kín.</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}><strong>Kiểm phiếu & Thực thi</strong></td>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Kiểm phiếu tức thời và tự động thực thi bởi Smart Contract không cần trung gian.</td>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Kiểm phiếu thủ công, kết quả có thể bị thao túng hoặc trì hoãn.</td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}><strong>Kiểm phiếu & Thực thi</strong></td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}>Kiểm phiếu tức thời và tự động thực thi bởi Smart Contract không cần trung gian.</td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}>Kiểm phiếu thủ công, kết quả có thể bị thao túng hoặc trì hoãn.</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}><strong>Minh bạch & Trách nhiệm</strong></td>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>100% công khai, có thể kiểm chứng độc lập trên Blockchain & IPFS.</td>
-                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Báo cáo nội bộ kín, giới hạn tiếp cận với công chúng.</td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}><strong>Minh bạch & Trách nhiệm</strong></td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}>100% công khai, có thể kiểm chứng độc lập trên Blockchain & IPFS.</td>
+                    <td style={{ padding: '12px', borderBottom: '1px solid var(--border-light)' }}>Báo cáo nội bộ kín, giới hạn tiếp cận với công chúng.</td>
                   </tr>
                 </tbody>
               </table>
@@ -813,39 +812,29 @@ export default function App() {
       {selectedIpfsData && (
         <div className="modal-overlay" onClick={() => setSelectedIpfsData(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3>Tài liệu trích xuất từ IPFS</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem' }}>Tài liệu trích xuất từ IPFS</h3>
               <button
-                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.2rem', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.2rem', cursor: 'pointer' }}
                 onClick={() => setSelectedIpfsData(null)}
               >
                 ✕
               </button>
             </div>
             
-            <p style={{ fontSize: '0.8rem', color: '#38bdf8', fontFamily: 'monospace', marginBottom: '14px' }}>
+            <p style={{ fontSize: '0.8rem', color: 'var(--primary)', fontFamily: 'var(--font-mono)', marginBottom: '12px' }}>
               IPFS CID: {selectedIpfsData.cid}
             </p>
 
-            <pre style={{
-              background: 'rgba(0, 0, 0, 0.4)',
-              padding: '16px',
-              borderRadius: '10px',
-              color: '#e2e8f0',
-              fontFamily: 'monospace',
-              fontSize: '0.82rem',
-              maxHeight: '380px',
-              overflowY: 'auto',
-              whiteSpace: 'pre-wrap'
-            }}>
+            <pre className="modal-pre">
               {typeof selectedIpfsData.content === 'string'
                 ? selectedIpfsData.content
                 : JSON.stringify(selectedIpfsData.content || selectedIpfsData, null, 2)}
             </pre>
 
-            <div className="modal-actions">
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button className="btn-secondary" onClick={() => setSelectedIpfsData(null)}>
-                Đóng
+                Đóng cửa sổ
               </button>
             </div>
           </div>
