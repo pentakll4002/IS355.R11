@@ -1,0 +1,110 @@
+version: "3.9"
+
+# ============================================================
+#  UIT Student Club DAO – Docker Compose Full Stack
+#  IS355.R11 – Công nghệ Blockchain
+# ============================================================
+
+services:
+
+  # ─────────────────────────────────────────────
+  # 1. HARDHAT LOCAL BLOCKCHAIN NODE
+  # ─────────────────────────────────────────────
+  hardhat:
+    build:
+      context: .
+      dockerfile: Dockerfile.hardhat
+    container_name: dao_hardhat_node
+    ports:
+      - "8545:8545"
+    networks:
+      - dao_network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8545 2>&1 | grep -q '' && exit 0 || exit 0"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  # ─────────────────────────────────────────────
+  # 2. DEPLOYER – runs deploy.js once then exits
+  #    Writes ABIs + config to shared volumes
+  # ─────────────────────────────────────────────
+  deployer:
+    build:
+      context: .
+      dockerfile: Dockerfile.hardhat
+    container_name: dao_deployer
+    networks:
+      - dao_network
+    volumes:
+      - backend_contracts:/mnt/backend_contracts
+      - frontend_contracts:/mnt/frontend_contracts
+    depends_on:
+      hardhat:
+        condition: service_healthy
+    environment:
+      - HARDHAT_NODE_HOST=hardhat
+      - FRONTEND_CONTRACTS_DIR=/mnt/frontend_contracts
+      - BACKEND_CONTRACTS_DIR=/mnt/backend_contracts
+    command: >
+      sh -c "mkdir -p /mnt/backend_contracts /mnt/frontend_contracts &&
+             npx hardhat run scripts/deploy.js --network localhost"
+    restart: "no"
+
+  # ─────────────────────────────────────────────
+  # 3. BACKEND – FastAPI Web3.py + IPFS Service
+  # ─────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: dao_backend
+    ports:
+      - "8000:8000"
+    networks:
+      - dao_network
+    volumes:
+      - backend_contracts:/app/backend/contracts
+      - ipfs_cache:/app/backend/ipfs_cache
+    environment:
+      - RPC_URL=http://hardhat:8545
+      - HOST=0.0.0.0
+      - PORT=8000
+      - PINATA_JWT=${PINATA_JWT:-}
+      - IPFS_GATEWAY=${IPFS_GATEWAY:-https://gateway.pinata.cloud/ipfs/}
+    depends_on:
+      deployer:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────────
+  # 4. FRONTEND – React + Ethers.js DApp
+  #    Note: frontend contracts config is served at build-time.
+  #    For Docker, the DApp connects MetaMask directly to
+  #    the hardhat node at localhost:8545 (exposed port).
+  # ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: dao_frontend
+    ports:
+      - "3000:3000"
+    networks:
+      - dao_network
+    environment:
+      - VITE_BACKEND_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+# ─────────────────────────────────────────────
+volumes:
+  backend_contracts:
+  frontend_contracts:
+  ipfs_cache:
+
+networks:
+  dao_network:
+    driver: bridge

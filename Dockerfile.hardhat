@@ -1,0 +1,19 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json ./
+RUN npm install
+
+COPY contracts/ ./contracts/
+COPY scripts/ ./scripts/
+COPY hardhat.config.js ./
+COPY ipfs_data/ ./ipfs_data/
+
+# Compile contracts during image build (cached layer)
+RUN npx hardhat compile
+
+EXPOSE 8545
+
+# Default: run hardhat node bound to all interfaces for Docker networking
+CMD ["npx", "hardhat", "node", "--hostname", "0.0.0.0"]

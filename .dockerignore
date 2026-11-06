@@ -1,0 +1,7 @@
+node_modules/
+.env
+frontend/dist/
+cache/
+artifacts/
+backend/ipfs_cache/
+*.log
