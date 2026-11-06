@@ -6,6 +6,7 @@ import ClubGovTokenAbi from './contracts/ClubGovToken.json';
 import ClubMembershipNFTAbi from './contracts/ClubMembershipNFT.json';
 
 const STATE_NAMES = ['Pending', 'Active', 'Defeated', 'Succeeded', 'Executed'];
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
 
 export default function App() {
   const [account, setAccount] = useState('');
@@ -13,8 +14,9 @@ export default function App() {
   const [ethBalance, setEthBalance] = useState('0');
   const [tokenBalance, setTokenBalance] = useState('0');
   const [hasNFT, setHasNFT] = useState(false);
+  const [backendVerified, setBackendVerified] = useState(null);
   
-  const [activeTab, setActiveTab] = useState('board'); // 'board' | 'propose' | 'ipfs'
+  const [activeTab, setActiveTab] = useState('board'); // 'board' | 'propose' | 'ipfs' | 'paper'
   const [proposals, setProposals] = useState([]);
   const [treasuryBalance, setTreasuryBalance] = useState('0');
   const [loading, setLoading] = useState(false);
@@ -58,6 +60,19 @@ export default function App() {
     }
   };
 
+  const verifyWithBackend = async (walletAddress) => {
+    try {
+      const resp = await fetch(`${BACKEND_URL}/api/voter-status/${walletAddress}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setBackendVerified(data);
+      }
+    } catch (e) {
+      console.warn("Backend Web3.py offline hoặc chưa kết nối:", e);
+      setBackendVerified(null);
+    }
+  };
+
   const refreshUserData = async (walletAddress, provider) => {
     try {
       // 1. Số dư ETH
@@ -78,6 +93,9 @@ export default function App() {
       const daoContract = new ethers.Contract(contractsConfig.ClubDAO, ClubDAOAbi, provider);
       const tWei = await daoContract.getTreasuryBalance();
       setTreasuryBalance(parseFloat(ethers.formatEther(tWei)).toFixed(3));
+
+      // 5. Xác thực qua Backend Web3.py (Tiêu chí 2)
+      await verifyWithBackend(walletAddress);
     } catch (e) {
       console.warn("Lỗi đọc dữ liệu on-chain:", e);
     }
@@ -109,7 +127,6 @@ export default function App() {
       setProposals(list);
     } catch (e) {
       console.warn("Chưa tải được danh sách proposal on-chain, dùng danh sách mẫu:", e);
-      // Danh sách demo mẫu nếu chưa deploy contract
       setProposals([
         {
           id: 1,
@@ -117,7 +134,7 @@ export default function App() {
           recipient: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
           amount: "0.5",
           title: "Đề xuất mua sắm máy chiếu & thiết bị nghiên cứu AI/Blockchain",
-          ipfsCid: "QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco",
+          ipfsCid: "QmProposalEquipmentsLab2026UIT",
           forVotes: 3000,
           againstVotes: 1000,
           startTime: Date.now() / 1000 - 400,
@@ -146,7 +163,7 @@ export default function App() {
   const handleCreateProposal = async (e) => {
     e.preventDefault();
     if (!account) return alert("Vui lòng kết nối ví trước!");
-    if (!hasNFT) return alert("RÀNG BUỘC: Bạn phải sở hữu Thẻ thành viên NFT để tạo đề xuất!");
+    if (!hasNFT) return alert("RÀNG BUỘC (Tiêu chí 4): Bạn phải sở hữu Thẻ thành viên NFT để tạo đề xuất!");
 
     try {
       setLoading(true);
@@ -155,7 +172,7 @@ export default function App() {
       // Gọi Backend Web3.py để upload lên IPFS
       let ipfsCid = "QmDefaultProposal" + Date.now();
       try {
-        const resp = await fetch("http://localhost:8000/api/ipfs/upload-proposal", {
+        const resp = await fetch(`${BACKEND_URL}/api/ipfs/upload-proposal`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -187,6 +204,10 @@ export default function App() {
       await tx.wait();
 
       setMsg({ text: "Tạo đề xuất thành công! CID: " + ipfsCid, type: "success" });
+      setFormTitle('');
+      setFormRecipient('');
+      setFormAmount('');
+      setFormDescription('');
       setActiveTab('board');
       await loadProposals(provider);
     } catch (err) {
@@ -246,18 +267,70 @@ export default function App() {
     }
   };
 
+  // Tiện ích tua nhanh thời gian Blockchain (phục vụ demo trực tiếp)
+  const handleAdvanceTime = async () => {
+    try {
+      setLoading(true);
+      setMsg({ text: "Đang tua nhanh thời gian blockchain (+5 phút)...", type: "warning" });
+      const resp = await fetch(`${BACKEND_URL}/api/time/advance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seconds: 320 })
+      });
+      if (resp.ok) {
+        setMsg({ text: "Đã tua thời gian blockchain qua hạn biểu quyết! Bây giờ bạn có thể gọi execute().", type: "success" });
+        if (window.ethereum) {
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          await loadProposals(provider);
+        }
+      } else {
+        throw new Error("Lỗi khi gọi backend API");
+      }
+    } catch (e) {
+      setMsg({ text: "Lỗi tua thời gian: " + e.message, type: "danger" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Tiện ích kích hoạt bot tự động giải ngân Web3.py
+  const handleTriggerBot = async () => {
+    try {
+      setLoading(true);
+      setMsg({ text: "Bot Web3.py đang quét và tự động thực thi các đề xuất đạt Quorum...", type: "warning" });
+      const resp = await fetch(`${BACKEND_URL}/api/bot/auto-execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ execute_now: true })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setMsg({ text: `Bot quét xong: ${data.readyToExecute.length} đề xuất sẵn sàng giải ngân!`, type: "success" });
+        if (window.ethereum) {
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          await loadProposals(provider);
+          await refreshUserData(account, provider);
+        }
+      }
+    } catch (e) {
+      setMsg({ text: "Lỗi Bot: " + e.message, type: "danger" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Xem nội dung chi tiết từ IPFS
   const fetchIpfsDetail = async (cid) => {
     setLoadingIpfs(true);
     try {
-      const resp = await fetch(`http://localhost:8000/api/ipfs/${cid}`);
+      const resp = await fetch(`${BACKEND_URL}/api/ipfs/${cid}`);
       if (resp.ok) {
         const data = await resp.json();
         setSelectedIpfsData(data);
       } else {
         setSelectedIpfsData({
           cid: cid,
-          content: `# Tài liệu IPFS [${cid}]\n\n- File: proposal_equipments.md\n- Kế hoạch: Mua sắm máy trạm AI và ví lạnh Ledger phục vụ phòng Lab CLB Blockchain UIT.\n- Dự toán: 0.5 ETH\n- Đã được băm và lưu trữ phi tập trung.`
+          content: `# Tài liệu IPFS [${cid}]\n- Đã được băm và lưu trữ phi tập trung.`
         });
       }
     } catch {
@@ -286,12 +359,25 @@ export default function App() {
           {account ? (
             <>
               {hasNFT ? (
-                <div className="member-badge">
+                <div className="member-badge" title="Bạn có quyền tạo đề xuất propose()">
                   <span>★</span> NFT Thẻ Thành Viên
                 </div>
               ) : (
                 <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                  (Chưa có Thẻ NFT)
+                  (Cử tri thường)
+                </div>
+              )}
+
+              {backendVerified && (
+                <div style={{
+                  fontSize: '0.75rem',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(56, 189, 248, 0.15)',
+                  border: '1px solid #38bdf8',
+                  color: '#38bdf8'
+                }}>
+                  ✓ Web3.py Verified
                 </div>
               )}
 
@@ -328,7 +414,7 @@ export default function App() {
         </div>
       )}
 
-      {/* STATS OVERVIEW */}
+      {/* STATS OVERVIEW & DEMO CONTROLS */}
       <section className="stats-grid">
         <div className="stat-card">
           <span className="stat-label">Quỹ DAO (Treasury)</span>
@@ -348,9 +434,49 @@ export default function App() {
         <div className="stat-card">
           <span className="stat-label">Sức Nặng Phiếu Của Bạn</span>
           <span className="stat-value" style={{ color: '#10b981' }}>{tokenBalance}</span>
-          <span className="stat-desc">1 Token ERC-20 = 1 Phiếu bầu</span>
+          <span className="stat-desc">1 Token ERC-20 = 1 Phiếu biểu quyết</span>
         </div>
       </section>
+
+      {/* DEMO ACTION TOOLBAR */}
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        alignItems: 'center',
+        background: 'rgba(30, 41, 59, 0.4)',
+        padding: '12px 18px',
+        borderRadius: '14px',
+        marginBottom: '24px',
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
+            🛠️ <strong>Công cụ Demo Live:</strong>
+          </span>
+          <button
+            className="btn-secondary"
+            style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+            onClick={handleAdvanceTime}
+            title="Tua qua 5 phút biểu quyết để kiểm thử hàm execute() ngay lập tức"
+          >
+            ⏩ Tua nhanh thời gian (+5 phút)
+          </button>
+          <button
+            className="btn-secondary"
+            style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+            onClick={handleTriggerBot}
+            title="Kích hoạt bot Web3.py tự động giải ngân các đề xuất hợp lệ"
+          >
+            🤖 Bot Web3.py Auto-Execute
+          </button>
+        </div>
+
+        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+          Mạng: Local Hardhat (ChainId: 31337)
+        </div>
+      </div>
 
       {/* NAVIGATION TABS */}
       <nav className="nav-tabs">
@@ -371,6 +497,12 @@ export default function App() {
           onClick={() => setActiveTab('ipfs')}
         >
           Tài Liệu Quản Trị IPFS
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'paper' ? 'active' : ''}`}
+          onClick={() => setActiveTab('paper')}
+        >
+          Cơ Sở Lý Thuyết (Paper & Autonomy)
         </button>
       </nav>
 
@@ -442,14 +574,14 @@ export default function App() {
                           <button
                             className="btn-vote-for"
                             onClick={() => handleVote(prop.id, 1)}
-                            disabled={loading}
+                            disabled={loading || Number(tokenBalance) <= 0}
                           >
                             ✓ Tán thành ({tokenBalance} phiếu)
                           </button>
                           <button
                             className="btn-vote-against"
                             onClick={() => handleVote(prop.id, 0)}
-                            disabled={loading}
+                            disabled={loading || Number(tokenBalance) <= 0}
                           >
                             ✕ Phản đối ({tokenBalance} phiếu)
                           </button>
@@ -468,7 +600,7 @@ export default function App() {
 
                       {prop.executed && (
                         <span style={{ color: '#c084fc', fontSize: '0.88rem', fontWeight: '600' }}>
-                          ✓ Đã giải ngân thành công
+                          ✓ Đã giải ngân thành công từ Quỹ Treasury
                         </span>
                       )}
                     </div>
@@ -610,6 +742,68 @@ export default function App() {
               >
                 Xem văn bản Markdown
               </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* TAB 4: PAPER & AUTONOMY ANALYSIS */}
+      {activeTab === 'paper' && (
+        <section>
+          <div className="section-header">
+            <h2>Nghiên Cứu Học Thuật: Mapping out the DAO Ecosystem & Assessing DAO Autonomy</h2>
+          </div>
+
+          <div className="stat-card" style={{ marginBottom: '20px' }}>
+            <h3 style={{ color: '#38bdf8', marginBottom: '8px' }}>
+              1. Giải Quyết Vấn Đề "Principal-Agent Problem" Trong Quản Trị
+            </h3>
+            <p style={{ color: '#cbd5e1', fontSize: '0.9rem', lineHeight: '1.6' }}>
+              Theo nghiên cứu của Vilma Mattila et al. (5ire, 2022) và giáo trình Blockchain, mô hình DAO loại bỏ xung đột lợi ích cốt lõi giữa <strong>người quản lý (Agent)</strong> và <strong>người sở hữu (Principal)</strong>. Trong các tổ chức truyền thống hoặc Centralized Autonomous Organization (CAO), quỹ thường bị kiểm soát bởi một nhóm nhỏ lãnh đạo có nguy cơ lạm quyền hoặc biển thủ. Trong DAO:
+            </p>
+            <ul style={{ paddingLeft: '20px', marginTop: '10px', color: '#94a3b8', fontSize: '0.88rem', lineHeight: '1.6' }}>
+              <li><strong>Ngân quỹ phi tập trung (Treasury on-chain):</strong> Tiền không nằm trong tài khoản ngân hàng của bất kỳ cá nhân nào, mà nằm trong Smart Contract của DAO.</li>
+              <li><strong>Biểu quyết dân chủ và có trọng số:</strong> Mọi thành viên nắm giữ Token (ClubGovToken) đều có quyền biểu quyết tỷ lệ với đóng góp của họ (Weighted Voting).</li>
+              <li><strong>Nguyên tắc Code is Law:</strong> Khi đề xuất đạt Quorum (20%) và đa số tán thành sau thời gian quy định, hàm <code>execute()</code> tự động chuyển tiền thẳng đến địa chỉ Vendor mà không cần bất kỳ admin hay ban giám đốc nào phê duyệt.</li>
+            </ul>
+          </div>
+
+          <div className="stat-card">
+            <h3 style={{ color: '#a855f7', marginBottom: '12px' }}>
+              2. Bảng So Sánh Giữa DAO và Tổ Chức Truyền Thống (Table I trong Bài Báo)
+            </h3>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.86rem', color: '#cbd5e1' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255, 255, 255, 0.05)', textAlign: 'left' }}>
+                    <th style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>Tiêu chí so sánh</th>
+                    <th style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#38bdf8' }}>Mô hình DAO (Hệ thống này)</th>
+                    <th style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8' }}>Tổ chức truyền thống</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}><strong>Cơ cấu tổ chức</strong></td>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Phẳng, dân chủ hóa hoàn toàn.</td>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Phân tầng, tập quyền thứ bậc cao.</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}><strong>Cơ chế ra quyết định</strong></td>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Bắt buộc phải bỏ phiếu cộng đồng on-chain.</td>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Một số ít lãnh đạo tự quyết hoặc biểu quyết nội bộ kín.</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}><strong>Kiểm phiếu & Thực thi</strong></td>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Kiểm phiếu tức thời và tự động thực thi bởi Smart Contract không cần trung gian.</td>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Kiểm phiếu thủ công, kết quả có thể bị thao túng hoặc trì hoãn.</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}><strong>Minh bạch & Trách nhiệm</strong></td>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>100% công khai, có thể kiểm chứng độc lập trên Blockchain & IPFS.</td>
+                    <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Báo cáo nội bộ kín, giới hạn tiếp cận với công chúng.</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </section>
