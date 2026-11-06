@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+package-lock.json
+frontend/package-lock.json
+
+# Hardhat build artifacts and cache
+artifacts/
+cache/
+
+# Frontend production build
+frontend/dist/
+
+# Python cache & local IPFS cache
+backend/__pycache__/
+backend/ipfs_cache/
+*.pyc
+
+# Environment files
+.env
+*.log

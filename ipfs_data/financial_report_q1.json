@@ -1,0 +1,28 @@
+{
+  "reportTitle": "Bao cao Tai chinh & Bang Du toan Mua sam Thiet bi Q1-2026",
+  "currency": "ETH",
+  "totalBudgetRequested": 0.5,
+  "exchangeRateEstimate": "1 ETH ~ 3,200 USD",
+  "lineItems": [
+    {
+      "itemId": "EQ-01",
+      "itemName": "Bo mach phuc vu chay node Blockchain & AI",
+      "unitPriceETH": 0.35,
+      "quantity": 1,
+      "totalETH": 0.35,
+      "vendor": "Nha cung cap Thiet bi CNTT Sai Gon",
+      "quotationReference": "QUOTE-2026-SG-884"
+    },
+    {
+      "itemId": "EQ-02",
+      "itemName": "Vi lanh Ledger Nano X phuc vu phong lab bao mat",
+      "unitPriceETH": 0.15,
+      "quantity": 1,
+      "totalETH": 0.15,
+      "vendor": "Phan phoi chinh hang Ledger VN",
+      "quotationReference": "QUOTE-2026-LDG-102"
+    }
+  ],
+  "verifiedBy": "Ban Kiem Soat Tai Chinh CLB Sinh Vien",
+  "auditDate": "2026-10-21"
+}

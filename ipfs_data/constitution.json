@@ -1,0 +1,17 @@
+{
+  "daoName": "UIT Student Club DAO",
+  "version": "1.0.0",
+  "governanceRules": {
+    "membershipCriteria": "Ví phải nắm giữ ít nhất 01 NFT Thẻ thành viên (ClubMembershipNFT) để được tạo đề xuất (propose).",
+    "votingPower": "Trọng số biểu quyết dựa trên số dư ERC-20 ClubGovToken (1 Token = 1 Phiếu bầu).",
+    "quorumPercentage": 20,
+    "votingPeriodSeconds": 86400,
+    "executionPolicy": "Tự động kích hoạt giải ngân quỹ Treasury sau khi hết hạn biểu quyết và đạt đủ Quorum + số phiếu tán thành > phản đối.",
+    "treasuryPolicy": "Ngân quỹ phục vụ cho các hoạt động nghiên cứu khoa học, mua sắm trang thiết bị và tổ chức sự kiện học thuật cho sinh viên UIT."
+  },
+  "roles": [
+    { "role": "President", "description": "Chủ nhiệm CLB - Đại diện pháp lý và điều phối" },
+    { "role": "TechnicalLead", "description": "Trưởng ban kỹ thuật - Quản trị hệ thống Blockchain" },
+    { "role": "Member", "description": "Thành viên chính thức nắm giữ NFT thẻ thành viên" }
+  ]
+}
